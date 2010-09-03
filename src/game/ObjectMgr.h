@@ -19,6 +19,7 @@
 #ifndef _OBJECTMGR_H
 #define _OBJECTMGR_H
 
+#include "Common.h"
 #include "Log.h"
 #include "Object.h"
 #include "Bag.h"
@@ -222,6 +223,9 @@ struct PetLevelInfo
     uint16 health;
     uint16 mana;
     uint16 armor;
+    uint32 mindmg;
+    uint32 maxdmg;
+    uint32 attackpower;
 };
 
 struct MailLevelReward

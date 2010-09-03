@@ -1916,6 +1916,10 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
                 // Metamorphosis, diff effects
                 if (spellInfo_1->SpellIconID == 3314 && spellInfo_2->SpellIconID == 3314)
                     return false;
+
+                // Nether Protection effects
+                if( spellInfo_2->SpellIconID == 1985 && spellInfo_1->SpellIconID == 1985 && spellInfo_1->SpellVisual[0] == 9750 )
+                    return false;
             }
             // Detect Invisibility and Mana Shield (multi-family check)
             if( spellInfo_1->Id == 132 && spellInfo_2->SpellIconID == 209 && spellInfo_2->SpellVisual[0] == 968 )
@@ -1991,6 +1995,11 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
                 //  Innervate and Glyph of Innervate and some other spells
                 if (spellInfo_1->SpellIconID == 62 && spellInfo_2->SpellIconID == 62)
                     return false;
+
+                // Lacerate and Moonfire
+                if((spellInfo_1->SpellIconID == 225 && spellInfo_2->SpellIconID == 2246) ||
+                   (spellInfo_2->SpellIconID == 225 && spellInfo_1->SpellIconID == 2246))
+                   return false;
 
                 // Wrath of Elune and Nature's Grace
                 if( spellInfo_1->Id == 16886 && spellInfo_2->Id == 46833 || spellInfo_2->Id == 16886 && spellInfo_1->Id == 46833 )
@@ -2341,7 +2350,7 @@ static void LoadSpellChains_AbilityHelper(SpellChainMap& chainMap, AbilitySpellP
     SpellChainMap::const_iterator chain_itr = chainMap.find(spell_id);
     if (chain_itr != chainMap.end())
     {
-        ASSERT(chain_itr->second.prev == prev_id && "LoadSpellChains_AbilityHelper: Conflicting data in talents or spell abilities dbc");
+        MANGOS_ASSERT(chain_itr->second.prev == prev_id && "LoadSpellChains_AbilityHelper: Conflicting data in talents or spell abilities dbc");
         return;
     }
 
@@ -2380,7 +2389,7 @@ static void LoadSpellChains_AbilityHelper(SpellChainMap& chainMap, AbilitySpellP
 
     if (deep == 0)
     {
-        ASSERT(false && "LoadSpellChains_AbilityHelper: Infinity cycle in spell ability data");
+        MANGOS_ASSERT(false && "LoadSpellChains_AbilityHelper: Infinity cycle in spell ability data");
         return;
     }
 
@@ -2475,7 +2484,7 @@ void SpellMgr::LoadSpellChains()
             SpellChainMap::const_iterator chain_itr = mSpellChains.find(forward_id);
             if (chain_itr != mSpellChains.end())
             {
-                ASSERT(chain_itr->second.prev == spell_id && "Conflicting data in talents or spell abilities dbc");
+                MANGOS_ASSERT(chain_itr->second.prev == spell_id && "Conflicting data in talents or spell abilities dbc");
                 continue;
             }
 
@@ -2483,7 +2492,7 @@ void SpellMgr::LoadSpellChains()
             AbilitySpellPrevMap::const_iterator prev_itr = prevRanks.find(forward_id);
             if (prev_itr != prevRanks.end())
             {
-                ASSERT(prev_itr->second == spell_id && "Conflicting data in talents or spell abilities dbc");
+                MANGOS_ASSERT(prev_itr->second == spell_id && "Conflicting data in talents or spell abilities dbc");
                 continue;
             }
 
@@ -2654,6 +2663,34 @@ void SpellMgr::LoadSpellChains()
                     continue;
                 }*/
             }
+
+        }
+
+        // removed ranks often still listed as forward in skill abilities but not listed as spell in it
+        if (node.prev)
+        {
+            bool skip = false;
+            // some forward spells still exist but excluded from real use as ranks and not listed in skill abilities now
+            SkillLineAbilityMap::const_iterator forward_ab_low = mSkillLineAbilityMap.lower_bound(spell_id);
+            SkillLineAbilityMap::const_iterator forward_ab_up  = mSkillLineAbilityMap.upper_bound(spell_id);
+            if (forward_ab_low == forward_ab_up)
+            {
+                for(SkillLineAbilityMap::const_iterator ab_itr = mSkillLineAbilityMap.lower_bound(node.prev); ab_itr != mSkillLineAbilityMap.upper_bound(node.prev); ++ab_itr)
+                {
+                    // spell listed as forward and not listed as ability
+                    // this is marker for removed ranks
+                    if (ab_itr->second->forward_spellid == spell_id)
+                    {
+                        sLog.outErrorDb("Spell %u (prev: %u, first: %u, rank: %d, req: %u) listed in `spell_chain` is removed rank by DBC data.",
+                            spell_id, node.prev, node.first, node.rank, node.req);
+                        skip = true;
+                        break;
+                    }
+                }
+            }
+
+            if (skip)
+                continue;
         }
 
         mSpellChains[spell_id] = node;
@@ -2724,7 +2761,7 @@ void SpellMgr::LoadSpellChains()
             mSpellChainsNext.insert(SpellChainMapNext::value_type(node.req,spell_id));
     }
 
-    // check single rank redundant cases (single rank talents not added by default so this can be only custom cases)
+    // check single rank redundant cases (single rank talents/spell abilities not added by default so this can be only custom cases)
     for(SpellChainMap::const_iterator i = mSpellChains.begin(); i != mSpellChains.end(); ++i)
     {
         // skip non-first ranks, and spells with additional reqs
@@ -3202,7 +3239,7 @@ bool SpellMgr::LoadPetDefaultSpells_helper(CreatureInfo const* cInfo, PetDefault
 
 void SpellMgr::LoadPetDefaultSpells()
 {
-    ASSERT(MAX_CREATURE_SPELL_DATA_SLOT <= CREATURE_MAX_SPELLS);
+    MANGOS_ASSERT(MAX_CREATURE_SPELL_DATA_SLOT <= CREATURE_MAX_SPELLS);
 
     mPetDefaultSpellsMap.clear();
 

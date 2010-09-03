@@ -19,6 +19,7 @@
 #ifndef __SPELL_H
 #define __SPELL_H
 
+#include "Common.h"
 #include "GridDefines.h"
 #include "SharedDefines.h"
 #include "DBCEnums.h"
@@ -380,7 +381,7 @@ class Spell
         void setState(uint32 state) { m_spellState = state; }
 
         void DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype);
-        void DoSummon(SpellEffectIndex eff_idx);
+        void DoSummonGroupPets(SpellEffectIndex eff_idx);
         void DoSummonWild(SpellEffectIndex eff_idx, uint32 forceFaction = 0);
         void DoSummonGuardian(SpellEffectIndex eff_idx, uint32 forceFaction = 0);
         void DoSummonTotem(SpellEffectIndex eff_idx, uint8 slot_dbc = 0);
@@ -695,7 +696,7 @@ namespace MaNGOS
 
         template<class T> inline void Visit(GridRefManager<T>  &m)
         {
-            ASSERT(i_data);
+            MANGOS_ASSERT(i_data);
 
             if(!i_originalCaster)
                 return;

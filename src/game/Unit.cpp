@@ -16,7 +16,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "Common.h"
+#include "Unit.h"
 #include "Log.h"
 #include "Opcodes.h"
 #include "WorldPacket.h"
@@ -25,7 +25,6 @@
 #include "ObjectMgr.h"
 #include "ObjectGuid.h"
 #include "SpellMgr.h"
-#include "Unit.h"
 #include "QuestDef.h"
 #include "Player.h"
 #include "Creature.h"
@@ -271,10 +270,10 @@ Unit::~Unit()
         delete m_charmInfo;
 
     // those should be already removed at "RemoveFromWorld()" call
-    ASSERT(m_gameObj.size() == 0);
-    ASSERT(m_dynObjGUIDs.size() == 0);
-    ASSERT(m_deletedAuras.size() == 0);
-    ASSERT(m_deletedHolders.size() == 0);
+    MANGOS_ASSERT(m_gameObj.size() == 0);
+    MANGOS_ASSERT(m_dynObjGUIDs.size() == 0);
+    MANGOS_ASSERT(m_deletedAuras.size() == 0);
+    MANGOS_ASSERT(m_deletedHolders.size() == 0);
 }
 
 void Unit::Update( uint32 p_time )
@@ -571,7 +570,7 @@ void Unit::resetAttackTimer(WeaponAttackType type)
 
 bool Unit::canReachWithAttack(Unit *pVictim) const
 {
-    ASSERT(pVictim);
+    MANGOS_ASSERT(pVictim);
     float reach = GetFloatValue(UNIT_FIELD_COMBATREACH);
     if( reach <= 0.0f )
         reach = 1.0f;
@@ -1022,10 +1021,10 @@ uint32 Unit::DealDamage(Unit *pVictim, uint32 damage, CleanDamage const* cleanDa
         // last damage from non duel opponent or opponent controlled creature
         if(duel_hasEnded)
         {
-            ASSERT(pVictim->GetTypeId()==TYPEID_PLAYER);
+            MANGOS_ASSERT(pVictim->GetTypeId()==TYPEID_PLAYER);
             Player *he = (Player*)pVictim;
 
-            ASSERT(he->duel);
+            MANGOS_ASSERT(he->duel);
 
             he->duel->opponent->CombatStopWithPets(true);
             he->CombatStopWithPets(true);
@@ -1198,10 +1197,10 @@ uint32 Unit::DealDamage(Unit *pVictim, uint32 damage, CleanDamage const* cleanDa
         // last damage from duel opponent
         if(duel_hasEnded)
         {
-            ASSERT(pVictim->GetTypeId()==TYPEID_PLAYER);
+            MANGOS_ASSERT(pVictim->GetTypeId()==TYPEID_PLAYER);
             Player *he = (Player*)pVictim;
 
-            ASSERT(he->duel);
+            MANGOS_ASSERT(he->duel);
 
             he->SetHealth(1);
 
@@ -3663,7 +3662,7 @@ void Unit::_UpdateAutoRepeatSpell()
 
 void Unit::SetCurrentCastedSpell( Spell * pSpell )
 {
-    ASSERT(pSpell);                                         // NULL may be never passed here, use InterruptSpell or InterruptNonMeleeSpells
+    MANGOS_ASSERT(pSpell);                                  // NULL may be never passed here, use InterruptSpell or InterruptNonMeleeSpells
 
     CurrentSpellTypes CSpellType = pSpell->GetCurrentContainer();
 
@@ -3734,7 +3733,7 @@ void Unit::SetCurrentCastedSpell( Spell * pSpell )
 
 void Unit::InterruptSpell(CurrentSpellTypes spellType, bool withDelayed, bool sendAutoRepeatCancelToClient)
 {
-    ASSERT(spellType < CURRENT_MAX_SPELL);
+    MANGOS_ASSERT(spellType < CURRENT_MAX_SPELL);
 
     if (m_currentSpells[spellType] && (withDelayed || m_currentSpells[spellType]->getState() != SPELL_STATE_DELAYED) )
     {
@@ -4212,6 +4211,12 @@ bool Unit::AddSpellAuraHolder(SpellAuraHolder *holder)
                     }
                     (*itr)->GetTarget()->RemoveSpellAuraHolder((*itr));
                     restart = true;
+                    break;
+                }  
+                // Judgements are always single 
+                else if (GetSpellSpecific(holder->GetId()) == SPELL_JUDGEMENT)
+                {
+                    (*itr)->GetTarget()->RemoveSpellAuraHolder((*itr));
                     break;
                 }
             }
@@ -5099,7 +5104,7 @@ GameObject* Unit::GetGameObject(uint32 spellId) const
 
 void Unit::AddGameObject(GameObject* gameObj)
 {
-    ASSERT(gameObj && gameObj->GetOwnerGUID()==0);
+    MANGOS_ASSERT(gameObj && gameObj->GetOwnerGUID()==0);
     m_gameObj.push_back(gameObj);
     gameObj->SetOwnerGUID(GetGUID());
 
@@ -5115,7 +5120,7 @@ void Unit::AddGameObject(GameObject* gameObj)
 
 void Unit::RemoveGameObject(GameObject* gameObj, bool del)
 {
-    ASSERT(gameObj && gameObj->GetOwnerGUID()==GetGUID());
+    MANGOS_ASSERT(gameObj && gameObj->GetOwnerGUID()==GetGUID());
 
     gameObj->SetOwnerGUID(0);
 
@@ -5966,6 +5971,11 @@ Pet* Unit::GetPet() const
     return NULL;
 }
 
+Pet* Unit::GetPet(uint64 petGUID)
+{
+    return FindPetWithGUID(petGUID);
+}
+
 Pet* Unit::_GetPet(ObjectGuid guid) const
 {
     return GetMap()->GetPet(guid);
@@ -6006,10 +6016,11 @@ float Unit::GetCombatDistance( const Unit* target ) const
 
 void Unit::SetPet(Pet* pet)
 {
-    SetPetGUID(pet ? pet->GetGUID() : 0);
+    SetPetGUID(pet ? pet->GetGUID() : 0);  //Using last pet guid for player
 
     if(pet && GetTypeId() == TYPEID_PLAYER)
     {
+        AddPetToList(pet);
         ((Player*)this)->SendPetGUIDs();
         // set infinite cooldown for summon spell
         SpellEntry const *spellInfo = sSpellStore.LookupEntry(pet->GetUInt32Value(UNIT_CREATED_BY_SPELL));
@@ -6021,6 +6032,26 @@ void Unit::SetPet(Pet* pet)
 void Unit::SetCharm(Unit* pet)
 {
     SetCharmGUID(pet ? pet->GetGUID() : 0);
+}
+
+void Unit::AddPetToList(Pet* pet)
+{
+    if (pet)
+        m_groupPets.insert(pet->GetGUID());
+}
+
+void Unit::RemovePetFromList(Pet* pet)
+{
+    m_groupPets.erase(pet->GetGUID());
+}
+
+Pet* Unit::FindPetWithGUID(uint64 petGUID)
+{
+    for(GroupPetList::const_iterator itr = m_groupPets.begin(); itr != m_groupPets.end(); ++itr)
+        if(Pet* pet = GetMap()->GetPet(*itr))
+            return pet;
+
+    return NULL;
 }
 
 void Unit::AddGuardian( Pet* pet )
@@ -6151,7 +6182,8 @@ Unit* Unit::SelectMagnetTarget(Unit *victim, SpellEntry const *spellInfo)
         return NULL;
 
     // Magic case
-    if(spellInfo && (spellInfo->DmgClass == SPELL_DAMAGE_CLASS_NONE || spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC))
+    if(spellInfo && (spellInfo->DmgClass == SPELL_DAMAGE_CLASS_NONE || spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC) &&
+    (spellInfo->SchoolMask & SPELL_SCHOOL_MASK_MAGIC || spellInfo->Mechanic == MECHANIC_GRIP))
     {
         Unit::AuraList const& magnetAuras = victim->GetAurasByType(SPELL_AURA_SPELL_MAGNET);
         for(Unit::AuraList::const_iterator itr = magnetAuras.begin(); itr != magnetAuras.end(); ++itr)
@@ -8590,7 +8622,18 @@ void Unit::setDeathState(DeathState s)
 
         // after removing a Fearaura (in RemoveAllAurasOnDeath)
         // Unit::SetFeared is called and makes that creatures attack player again
-        StopMoving();
+        if (GetTypeId() == TYPEID_UNIT)
+        {
+            clearUnitState(UNIT_STAT_MOVING);
+
+            GetMap()->CreatureRelocation((Creature*)this, GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
+            SendMonsterMove(GetPositionX(), GetPositionY(), GetPositionZ(), SPLINETYPE_NORMAL, SPLINEFLAG_WALKMODE, 0);
+        }
+        else
+        {
+            if (!IsStopped())
+                StopMoving();
+        }
 
         ModifyAuraState(AURA_STATE_HEALTHLESS_20_PERCENT, false);
         ModifyAuraState(AURA_STATE_HEALTHLESS_35_PERCENT, false);
@@ -8681,7 +8724,7 @@ void Unit::DeleteThreatList()
 
 void Unit::TauntApply(Unit* taunter)
 {
-    ASSERT(GetTypeId()== TYPEID_UNIT);
+    MANGOS_ASSERT(GetTypeId()== TYPEID_UNIT);
 
     if(!taunter || (taunter->GetTypeId() == TYPEID_PLAYER && ((Player*)taunter)->isGameMaster()))
         return;
@@ -8704,7 +8747,7 @@ void Unit::TauntApply(Unit* taunter)
 
 void Unit::TauntFadeOut(Unit *taunter)
 {
-    ASSERT(GetTypeId()== TYPEID_UNIT);
+    MANGOS_ASSERT(GetTypeId()== TYPEID_UNIT);
 
     if(!taunter || (taunter->GetTypeId() == TYPEID_PLAYER && ((Player*)taunter)->isGameMaster()))
         return;
@@ -8746,7 +8789,7 @@ bool Unit::SelectHostileTarget()
     //next-victim-selection algorithm and evade mode are called
     //threat list sorting etc.
 
-    ASSERT(GetTypeId()== TYPEID_UNIT);
+    MANGOS_ASSERT(GetTypeId()== TYPEID_UNIT);
 
     if (!this->isAlive())
         return false;
@@ -9810,23 +9853,11 @@ void CharmInfo::SetSpellAutocast( uint32 spell_id, bool state )
 
 void CharmInfo::SetActionBar( uint8 index, uint32 spellOrAction, ActiveStates type )
 {
-    // chained pets
-    if (m_unit->GetTypeId() == TYPEID_UNIT && ((Creature*)m_unit)->isPet())
-        if (Pet *chainedPet = m_unit->GetPet())
-            if (((Creature*)m_unit)->GetEntry() == chainedPet->GetEntry() && chainedPet->GetCharmInfo())
-                chainedPet->GetCharmInfo()->SetActionBar(index, spellOrAction, type);
-
     PetActionBar[index].SetActionAndType(spellOrAction,type);
 }
 
 void Unit::DoPetAction( Player* owner, uint8 flag, uint32 spellid, uint64 guid1, uint64 guid2 )
 {
-    // chained
-    if (GetTypeId() == TYPEID_UNIT && ((Creature*)this)->isPet())
-        if (Pet *chainedPet = GetPet())
-            if (((Creature*)this)->GetEntry() == chainedPet->GetEntry())
-                chainedPet->DoPetAction(owner, flag, spellid, guid1, guid2);
-
     switch(flag)
     {
         case ACT_COMMAND:                                   //0x07
@@ -10022,12 +10053,6 @@ void Unit::DoPetAction( Player* owner, uint8 flag, uint32 spellid, uint64 guid1,
 
 void Unit::DoPetCastSpell( Player *owner, uint8 cast_count, SpellCastTargets targets, SpellEntry const* spellInfo )
 {
-    // chained
-    if (GetTypeId() == TYPEID_UNIT && ((Creature*)this)->isPet())
-        if (Pet *chainedPet = GetPet())
-            if (((Creature*)this)->GetEntry() == chainedPet->GetEntry())
-                chainedPet->DoPetCastSpell(owner, cast_count, targets, spellInfo);
-
     Creature* pet = dynamic_cast<Creature*>(this);
 
     clearUnitState(UNIT_STAT_MOVING);
